@@ -192,11 +192,27 @@ def build_browser(max_wait: int, *, user_data_dir: Path | None, headless: bool) 
         options.add_argument("--headless=new")
         options.add_argument("--window-size=1920,1080")
 
-    service = Service(executable_path=resolve_chromedriver_path())
-    browser = webdriver.Chrome(service=service, options=options)
+    browser = _start_browser_with_automatic_driver(options)
     browser.maximize_window()
     wait = WebDriverWait(browser, max_wait)
     return browser, wait
+
+
+def _start_browser_with_automatic_driver(options: webdriver.ChromeOptions) -> webdriver.Chrome:
+    """Inicializa o Chrome usando Selenium Manager e aplica fallback se necessário."""
+
+    try:
+        # Selenium 4.10+ utiliza o Selenium Manager para baixar o driver correto
+        # automaticamente. Não informamos `Service` para que ele tente resolver sozinho
+        # a versão compatível com o Chrome instalado na máquina do usuário.
+        return webdriver.Chrome(options=options)
+    except Exception as exc:  # noqa: BLE001 - registramos e caímos no fallback antigo.
+        logging.warning(
+            "Selenium Manager não conseguiu resolver o ChromeDriver automaticamente: %s",
+            exc,
+        )
+        service = Service(executable_path=resolve_chromedriver_path())
+        return webdriver.Chrome(service=service, options=options)
 
 
 def wait_for_message_box(wait: WebDriverWait):
