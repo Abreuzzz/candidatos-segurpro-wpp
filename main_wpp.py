@@ -27,6 +27,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 # sem Chrome pré-instalado.
 import chromedriver_py
 
+try:  # Preferimos o webdriver_manager por baixar a versão alinhada ao Chrome instalado.
+    from webdriver_manager.chrome import ChromeDriverManager
+except Exception:  # noqa: BLE001 - o pacote é opcional; cairemos no fallback embutido.
+    ChromeDriverManager = None
+
 
 DEFAULT_MESSAGE = (
     "Olá, boa noite! Tudo bem?\n"
@@ -167,6 +172,18 @@ def normalize_phone(value: object) -> str | None:
     return digits or None
 
 
+def resolve_chromedriver_path() -> str:
+    """Retorna o driver compatível com a versão instalada do Chrome."""
+
+    if ChromeDriverManager is not None:
+        try:
+            return ChromeDriverManager().install()
+        except Exception as exc:  # noqa: BLE001 - apenas registramos e seguimos com fallback.
+            logging.warning("Falha ao baixar ChromeDriver via webdriver_manager: %s", exc)
+
+    return chromedriver_py.binary_path
+
+
 def build_browser(max_wait: int, *, user_data_dir: Path | None, headless: bool) -> tuple[webdriver.Chrome, WebDriverWait]:
     options = webdriver.ChromeOptions()
     if user_data_dir:
@@ -175,7 +192,7 @@ def build_browser(max_wait: int, *, user_data_dir: Path | None, headless: bool) 
         options.add_argument("--headless=new")
         options.add_argument("--window-size=1920,1080")
 
-    service = Service(executable_path=chromedriver_py.binary_path)
+    service = Service(executable_path=resolve_chromedriver_path())
     browser = webdriver.Chrome(service=service, options=options)
     browser.maximize_window()
     wait = WebDriverWait(browser, max_wait)
